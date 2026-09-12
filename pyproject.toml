@@ -1,0 +1,30 @@
+[project]
+name = "my-lit-mcp"
+version = "0.1.0"
+description = "Own your literature pipeline: free scholarly ingest, OA PDF parsing, local SQLite, portable MCP"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "httpx>=0.28.1",
+    "mcp>=2,<3",
+    "pymupdf>=1.28.2",
+    "pyyaml>=6.0.3",
+]
+
+[project.scripts]
+my-lit = "my_lit_mcp.cli:main"
+my-lit-mcp = "my_lit_mcp.server:main"
+
+[build-system]
+requires = ["uv_build>=0.12.13,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

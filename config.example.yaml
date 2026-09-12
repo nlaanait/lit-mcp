@@ -1,0 +1,49 @@
+# Example niche config. Copy via `my-lit init` and edit.
+db_path: null
+pdf_cache_dir: null
+
+queries:
+  - name: example_arxiv
+    source: arxiv
+    query: 'all:"retrieval augmented generation"'
+    enabled: true
+  - name: example_openalex
+    source: openalex
+    query: "retrieval augmented generation"
+    enabled: false
+  - name: example_s2
+    source: s2
+    query: "retrieval augmented generation"
+    enabled: false
+  - name: example_pubmed
+    source: pubmed
+    query: "retrieval augmented generation"
+    enabled: false
+
+openalex:
+  max_search_calls_per_day: 800
+
+seeds: []
+
+ranking:
+  include_terms:
+    - retrieval
+    - embedding
+  exclude_terms: []
+  must_read_threshold: 0.55
+  weight_seed: 0.6
+  weight_keyword: 0.3
+  weight_recency: 0.1
+  match_fulltext: true
+
+pdf:
+  parse_on_ingest: true
+  max_pdfs_per_run: 25
+  max_pages: 40
+
+rate_limits:
+  s2_sleep_seconds: 1.1
+  pubmed_sleep_seconds: 0.35
+  arxiv_sleep_seconds: 3.0
+  openalex_sleep_seconds: 0.2
+  unpaywall_sleep_seconds: 0.2

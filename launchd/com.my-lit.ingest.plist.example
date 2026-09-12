@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.my-lit.ingest</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/opt/homebrew/bin/uv</string>
+    <string>--directory</string>
+    <string>/ABSOLUTE/PATH/TO/my-lit-mcp</string>
+    <string>run</string>
+    <string>my-lit</string>
+    <string>ingest</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>UNPAYWALL_EMAIL</key>
+    <string>you@example.com</string>
+    <key>OPENALEX_API_KEY</key>
+    <string></string>
+  </dict>
+  <key>StartInterval</key>
+  <integer>86400</integer>
+  <key>StandardOutPath</key>
+  <string>/Users/YOU/Library/Logs/my-lit-ingest.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/YOU/Library/Logs/my-lit-ingest.err.log</string>
+  <key>WorkingDirectory</key>
+  <string>/ABSOLUTE/PATH/TO/my-lit-mcp</string>
+</dict>
+</plist>

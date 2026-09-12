@@ -1,0 +1,76 @@
+# my-lit-mcp
+
+Own a free literature pipeline on your Mac: ingest from Semantic Scholar, PubMed, arXiv, and OpenAlex (free daily allowance), store in local SQLite, download OA PDFs, extract full text with PyMuPDF, rank with your rules, and expose it to any MCP host over stdio.
+
+## Mac setup
+
+```bash
+brew install uv
+cd my-lit-mcp
+uv sync
+
+# optional free keys (never required for arXiv)
+export UNPAYWALL_EMAIL=you@example.com
+export OPENALEX_API_KEY=...          # free; stay within daily free search allowance
+export SEMANTIC_SCHOLAR_API_KEY=...  # free; improves rate limits
+export NCBI_API_KEY=...              # free; improves PubMed rate limits
+
+uv run my-lit init
+# edit ~/Library/Application Support/my-lit-mcp/config.yaml
+uv run my-lit ingest
+uv run my-lit status
+```
+
+Data defaults (macOS):
+
+- Config: `~/Library/Application Support/my-lit-mcp/config.yaml`
+- DB: `~/Library/Application Support/my-lit-mcp/papers.db`
+- PDFs: `~/Library/Application Support/my-lit-mcp/pdfs`
+
+Override with `MY_LIT_CONFIG`, `MY_LIT_DB`, `MY_LIT_PDF_DIR`, or `MY_LIT_DATA_DIR`.
+
+## CLI
+
+| Command | Purpose |
+|---------|---------|
+| `my-lit init` | Create config + DB + PDF cache |
+| `my-lit ingest` | Fetch queries/seeds, Unpaywall enrich, score, optionally parse PDFs |
+| `my-lit parse` | Backfill OA PDF download + text extraction |
+| `my-lit status` | Counts, OpenAlex calls today, last run |
+
+Schedule ingest with the LaunchAgent example in [`launchd/com.my-lit.ingest.plist.example`](launchd/com.my-lit.ingest.plist.example).
+
+## Portable MCP registration
+
+Copy [`mcp.example.json`](mcp.example.json) into Claude Desktop / Claude Code / VS Code / Windsurf (or any stdio MCP host). Replace absolute paths and env values. This is **not** Cursor-specific.
+
+```bash
+uv run my-lit-mcp
+```
+
+MCP tools:
+
+- `list_queries`
+- `search_local`
+- `search_fulltext`
+- `get_paper`
+- `get_fulltext`
+- `new_since`
+- `must_read`
+- `similar_to`
+- `mark_feedback`
+- `pipeline_status`
+
+## OpenAlex free-tier rule
+
+OpenAlex search uses a free API key and a hard daily call cap (`openalex.max_search_calls_per_day`, default 800). The pipeline stops OpenAlex for the day when the cap or HTTP 429 is hit. Do not enable prepaid OpenAlex billing.
+
+## Ranking
+
+`score = 0.6 * seed_hit + 0.3 * keyword_hit + 0.1 * recency`, then adjust from feedback labels (`relevant` / `not_relevant` / `must_read`). Keyword matching can include PDF full text when `match_fulltext: true`.
+
+## Tests
+
+```bash
+uv run pytest -q
+```
