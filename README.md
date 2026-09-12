@@ -16,7 +16,7 @@ export SEMANTIC_SCHOLAR_API_KEY=...  # free; improves rate limits
 export NCBI_API_KEY=...              # free; improves PubMed rate limits
 
 uv run my-lit init
-# edit ~/Library/Application Support/my-lit-mcp/config.yaml
+# optionally edit queries in config.yaml; manage seeds via MCP (add_seed), not YAML
 uv run my-lit ingest
 uv run my-lit status
 ```
@@ -51,6 +51,7 @@ uv run my-lit-mcp
 MCP tools:
 
 - `list_queries`
+- `list_seeds` / `resolve_seed` / `add_seed` / `remove_seed` / `set_seed_enabled`
 - `search_local`
 - `search_fulltext`
 - `get_paper`
@@ -60,6 +61,20 @@ MCP tools:
 - `similar_to`
 - `mark_feedback`
 - `pipeline_status`
+
+## Seed management (MCP, not config files)
+
+Seeds live in SQLite. Agents should manage them via MCP—do **not** ask users to edit YAML for seeds.
+
+| Tool | Purpose |
+|------|---------|
+| `list_seeds` | Show saved seeds (`enabled_only` optional) |
+| `resolve_seed` | Look up metadata by `s2_id`, `doi`, `arxiv_id`, local `paper_id`, or `title_query` (candidates) without saving |
+| `add_seed` | Save a seed (same lookup fields as resolve); upserts by `s2_id` |
+| `remove_seed` | Delete by `seed_id` or `s2_id` |
+| `set_seed_enabled` | Disable/enable without deleting |
+
+On `my-lit ingest`, enabled DB seeds drive Semantic Scholar recommendations. Any leftover `seeds:` entries in `config.yaml` are imported into the DB once (legacy bootstrap only).
 
 ## API keys (all free)
 

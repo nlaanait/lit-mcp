@@ -116,6 +116,11 @@ async def test_mcp_tools_registered():
     names = {t.name for t in tools}
     assert {
         "list_queries",
+        "list_seeds",
+        "resolve_seed",
+        "add_seed",
+        "remove_seed",
+        "set_seed_enabled",
         "search_local",
         "search_fulltext",
         "get_paper",

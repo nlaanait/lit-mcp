@@ -8,7 +8,9 @@ import httpx
 from my_lit_mcp.ingest import PaperRecord, normalize_doi
 
 S2_SEARCH = "https://api.semanticscholar.org/graph/v1/paper/search"
+S2_PAPER = "https://api.semanticscholar.org/graph/v1/paper/{paper_id}"
 S2_RECS = "https://api.semanticscholar.org/recommendations/v1/papers/forpaper/{paper_id}"
+S2_FIELDS = "title,abstract,authors,year,venue,url,externalIds,openAccessPdf"
 
 
 def _headers(api_key: str) -> dict[str, str]:
@@ -52,13 +54,30 @@ def search_s2(
     params = {
         "query": query,
         "limit": max_results,
-        "fields": "title,abstract,authors,year,venue,url,externalIds,openAccessPdf",
+        "fields": S2_FIELDS,
     }
     with httpx.Client(timeout=60.0, headers=_headers(api_key)) as client:
         resp = client.get(S2_SEARCH, params=params)
         resp.raise_for_status()
         time.sleep(sleep_seconds)
         return [_from_s2(item) for item in (resp.json().get("data") or [])]
+
+
+def get_paper(
+    paper_id: str,
+    *,
+    api_key: str = "",
+    sleep_seconds: float = 1.1,
+) -> PaperRecord | None:
+    """Fetch one paper by S2 paperId, DOI (DOI:...), ArXiv (ARXIV:...), or CorpusId."""
+    params = {"fields": S2_FIELDS}
+    with httpx.Client(timeout=60.0, headers=_headers(api_key)) as client:
+        resp = client.get(S2_PAPER.format(paper_id=paper_id), params=params)
+        if resp.status_code == 404:
+            return None
+        resp.raise_for_status()
+        time.sleep(sleep_seconds)
+        return _from_s2(resp.json())
 
 
 def recommendations_for_seed(
@@ -70,7 +89,7 @@ def recommendations_for_seed(
 ) -> list[PaperRecord]:
     params = {
         "limit": limit,
-        "fields": "title,abstract,authors,year,venue,url,externalIds,openAccessPdf",
+        "fields": S2_FIELDS,
     }
     with httpx.Client(timeout=60.0, headers=_headers(api_key)) as client:
         resp = client.get(S2_RECS.format(paper_id=paper_id), params=params)

@@ -81,6 +81,20 @@ CREATE TABLE IF NOT EXISTS api_usage (
     calls INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (day, provider)
 );
+
+CREATE TABLE IF NOT EXISTS seeds (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    s2_id TEXT NOT NULL UNIQUE,
+    doi TEXT,
+    title TEXT,
+    year INTEGER,
+    url TEXT,
+    notes TEXT,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_seeds_enabled ON seeds(enabled);
 """
 
 
@@ -413,3 +427,104 @@ class Database:
             "SELECT DISTINCT source FROM papers WHERE source IS NOT NULL ORDER BY source"
         ).fetchall()
         return [r["source"] for r in rows]
+
+    def list_seeds(
+        self, conn: sqlite3.Connection, *, enabled_only: bool = False
+    ) -> list[dict[str, Any]]:
+        if enabled_only:
+            rows = conn.execute(
+                "SELECT * FROM seeds WHERE enabled = 1 ORDER BY id ASC"
+            ).fetchall()
+        else:
+            rows = conn.execute("SELECT * FROM seeds ORDER BY id ASC").fetchall()
+        return [dict(r) for r in rows]
+
+    def get_seed(self, conn: sqlite3.Connection, seed_id: int) -> dict[str, Any] | None:
+        row = conn.execute("SELECT * FROM seeds WHERE id = ?", (seed_id,)).fetchone()
+        return dict(row) if row else None
+
+    def get_seed_by_s2_id(self, conn: sqlite3.Connection, s2_id: str) -> dict[str, Any] | None:
+        row = conn.execute("SELECT * FROM seeds WHERE s2_id = ?", (s2_id,)).fetchone()
+        return dict(row) if row else None
+
+    def add_seed(
+        self,
+        conn: sqlite3.Connection,
+        *,
+        s2_id: str,
+        doi: str | None = None,
+        title: str | None = None,
+        year: int | None = None,
+        url: str | None = None,
+        notes: str | None = None,
+        enabled: bool = True,
+    ) -> dict[str, Any]:
+        now = utc_now()
+        existing = self.get_seed_by_s2_id(conn, s2_id)
+        if existing:
+            conn.execute(
+                """
+                UPDATE seeds SET
+                  doi = COALESCE(?, doi),
+                  title = COALESCE(?, title),
+                  year = COALESCE(?, year),
+                  url = COALESCE(?, url),
+                  notes = COALESCE(?, notes),
+                  enabled = ?,
+                  updated_at = ?
+                WHERE s2_id = ?
+                """,
+                (doi, title, year, url, notes, int(enabled), now, s2_id),
+            )
+            return self.get_seed_by_s2_id(conn, s2_id) or existing
+        cur = conn.execute(
+            """
+            INSERT INTO seeds(s2_id, doi, title, year, url, notes, enabled, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (s2_id, doi, title, year, url, notes, int(enabled), now, now),
+        )
+        return self.get_seed(conn, int(cur.lastrowid)) or {
+            "id": int(cur.lastrowid),
+            "s2_id": s2_id,
+        }
+
+    def remove_seed(
+        self,
+        conn: sqlite3.Connection,
+        *,
+        seed_id: int | None = None,
+        s2_id: str | None = None,
+    ) -> bool:
+        if seed_id is not None:
+            cur = conn.execute("DELETE FROM seeds WHERE id = ?", (seed_id,))
+            return cur.rowcount > 0
+        if s2_id:
+            cur = conn.execute("DELETE FROM seeds WHERE s2_id = ?", (s2_id,))
+            return cur.rowcount > 0
+        raise ValueError("Provide seed_id or s2_id")
+
+    def set_seed_enabled(
+        self, conn: sqlite3.Connection, seed_id: int, enabled: bool
+    ) -> dict[str, Any] | None:
+        conn.execute(
+            "UPDATE seeds SET enabled = ?, updated_at = ? WHERE id = ?",
+            (int(enabled), utc_now(), seed_id),
+        )
+        return self.get_seed(conn, seed_id)
+
+    def enabled_seed_ids(self, conn: sqlite3.Connection) -> list[str]:
+        rows = conn.execute(
+            "SELECT s2_id FROM seeds WHERE enabled = 1 ORDER BY id ASC"
+        ).fetchall()
+        return [r["s2_id"] for r in rows]
+
+    def import_seed_ids(self, conn: sqlite3.Connection, s2_ids: list[str]) -> int:
+        """Insert missing seed IDs (no metadata). Returns count inserted."""
+        inserted = 0
+        for s2_id in s2_ids:
+            if not s2_id or self.get_seed_by_s2_id(conn, s2_id):
+                continue
+            self.add_seed(conn, s2_id=s2_id)
+            inserted += 1
+        return inserted

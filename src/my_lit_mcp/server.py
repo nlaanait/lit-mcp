@@ -6,12 +6,14 @@ from mcp.server.mcpserver import MCPServer
 
 from my_lit_mcp.config import load_config
 from my_lit_mcp.db import Database
+from my_lit_mcp import seeds as seed_svc
 
 server = MCPServer(
     name="my-lit-mcp",
     instructions=(
-        "Local literature corpus tools. Search and read papers already ingested "
-        "into the SQLite pipeline; do not assume live web search."
+        "Local literature corpus tools. Manage seed papers and search/read papers "
+        "already ingested into the SQLite pipeline. Prefer seed MCP tools over "
+        "editing config files."
     ),
 )
 
@@ -37,6 +39,80 @@ def list_queries() -> str:
         ],
         indent=2,
     )
+
+
+@server.tool()
+def list_seeds(enabled_only: bool = False) -> str:
+    """List seed papers stored in the local DB (preferred over config.yaml)."""
+    cfg, db = _db()
+    rows = seed_svc.list_seeds(cfg, enabled_only=enabled_only, db=db)
+    return json.dumps(rows, indent=2, default=str)
+
+
+@server.tool()
+def resolve_seed(
+    s2_id: str | None = None,
+    doi: str | None = None,
+    arxiv_id: str | None = None,
+    title_query: str | None = None,
+    paper_id: int | None = None,
+) -> str:
+    """Look up seed candidate metadata without saving. Use before add_seed if unsure."""
+    cfg, db = _db()
+    result = seed_svc.resolve_seed_candidate(
+        cfg,
+        s2_id=s2_id,
+        doi=doi,
+        arxiv_id=arxiv_id,
+        title_query=title_query,
+        paper_id=paper_id,
+        db=db,
+    )
+    return json.dumps(result, indent=2, default=str)
+
+
+@server.tool()
+def add_seed(
+    s2_id: str | None = None,
+    doi: str | None = None,
+    arxiv_id: str | None = None,
+    title_query: str | None = None,
+    paper_id: int | None = None,
+    notes: str | None = None,
+    enabled: bool = True,
+) -> str:
+    """Add or update a seed paper in the DB. Prefer s2_id or doi; title_query returns candidates."""
+    cfg, db = _db()
+    result = seed_svc.add_seed(
+        cfg,
+        s2_id=s2_id,
+        doi=doi,
+        arxiv_id=arxiv_id,
+        title_query=title_query,
+        paper_id=paper_id,
+        notes=notes,
+        enabled=enabled,
+        db=db,
+    )
+    return json.dumps(result, indent=2, default=str)
+
+
+@server.tool()
+def remove_seed(seed_id: int | None = None, s2_id: str | None = None) -> str:
+    """Delete a seed by local seed_id or Semantic Scholar s2_id."""
+    cfg, db = _db()
+    if seed_id is None and not s2_id:
+        return json.dumps({"error": "missing_input", "hint": "Provide seed_id or s2_id"})
+    result = seed_svc.remove_seed(cfg, seed_id=seed_id, s2_id=s2_id, db=db)
+    return json.dumps(result, indent=2, default=str)
+
+
+@server.tool()
+def set_seed_enabled(seed_id: int, enabled: bool = True) -> str:
+    """Enable or disable a seed without deleting it."""
+    cfg, db = _db()
+    result = seed_svc.set_seed_enabled(cfg, seed_id, enabled, db=db)
+    return json.dumps(result, indent=2, default=str)
 
 
 @server.tool()
@@ -141,10 +217,13 @@ def mark_feedback(paper_id: int, label: str, notes: str | None = None) -> str:
 
 @server.tool()
 def pipeline_status() -> str:
-    """Last run, OpenAlex daily calls, PDF parse counts."""
-    _, db = _db()
+    """Last run, OpenAlex daily calls, PDF parse counts, seed count."""
+    cfg, db = _db()
     with db.session() as conn:
-        return json.dumps(db.status_summary(conn), indent=2, default=str)
+        summary = db.status_summary(conn)
+        summary["seeds"] = len(db.list_seeds(conn))
+        summary["seeds_enabled"] = len(db.enabled_seed_ids(conn))
+    return json.dumps(summary, indent=2, default=str)
 
 
 def main() -> None:
