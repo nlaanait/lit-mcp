@@ -61,6 +61,21 @@ MCP tools:
 - `mark_feedback`
 - `pipeline_status`
 
+## API keys (all free)
+
+| Env var | Required? | Why set it |
+|---------|-----------|------------|
+| `UNPAYWALL_EMAIL` | For OA PDF resolution | Unpaywall requires an email; no key signup |
+| `OPENALEX_API_KEY` | Only if an OpenAlex query is enabled | Free key; see OpenAlex rule below |
+| `SEMANTIC_SCHOLAR_API_KEY` | No | Avoids shared-pool **429**s; higher dedicated rate limits |
+| `NCBI_API_KEY` | No | PubMed E-utilities ~3 req/s without a key → ~10 req/s with one |
+
+**Semantic Scholar:** request a free API key from [Semantic Scholar’s API page](https://www.semanticscholar.org/product/api). This project sends it as `x-api-key` on paper search and seed recommendations. Anonymous calls often work briefly, then throttle.
+
+**NCBI / PubMed:** create a free NCBI account and generate an API key under account settings. Pass it as `NCBI_API_KEY`; it is forwarded to `esearch` / `efetch` as `api_key`.
+
+Put the same env vars in your shell profile and in the `env` block of `mcp.example.json` so CLI ingest and the MCP server share them.
+
 ## OpenAlex free-tier rule
 
 OpenAlex search uses a free API key and a hard daily call cap (`openalex.max_search_calls_per_day`, default 800). The pipeline stops OpenAlex for the day when the cap or HTTP 429 is hit. Do not enable prepaid OpenAlex billing.
