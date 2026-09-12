@@ -23,8 +23,6 @@ queries:
 openalex:
   max_search_calls_per_day: 800
 
-seeds: []
-
 ranking:
   include_terms:
     - retrieval

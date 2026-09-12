@@ -12,7 +12,7 @@ from my_lit_mcp.ingest.sources import s2 as s2_src
 from my_lit_mcp.ingest.sources.unpaywall import resolve_oa_pdf
 from my_lit_mcp.pdf import download_pdf, extract_text
 from my_lit_mcp.rank import score_paper
-from my_lit_mcp.seeds import active_seed_ids, sync_config_seeds
+from my_lit_mcp.seeds import active_seed_ids
 
 log = logging.getLogger(__name__)
 
@@ -158,8 +158,7 @@ def run_ingest(cfg: AppConfig, db: Database | None = None) -> dict[str, Any]:
     upserted = 0
     errors: list[str] = []
 
-    # Prefer DB-managed seeds; import any leftover config.yaml seeds once.
-    sync_config_seeds(cfg, database)
+    # DB-managed seeds only (via MCP add_seed / list_seeds).
     seed_ids = active_seed_ids(cfg, database)
 
     for seed in seed_ids:

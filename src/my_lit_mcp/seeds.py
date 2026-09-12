@@ -207,23 +207,7 @@ def set_seed_enabled(
     return {"ok": True, "seed": seed}
 
 
-def sync_config_seeds(cfg: AppConfig, db: Database | None = None) -> dict[str, Any]:
-    """One-way import of legacy config.yaml seeds into the DB (no YAML writes)."""
-    database = db or Database(cfg.db_path)
-    with database.session() as conn:
-        inserted = database.import_seed_ids(conn, list(cfg.seeds or []))
-        total = len(database.list_seeds(conn))
-    return {"imported": inserted, "seeds_total": total}
-
-
 def active_seed_ids(cfg: AppConfig, db: Database | None = None) -> list[str]:
     database = db or Database(cfg.db_path)
     with database.session() as conn:
-        # Prefer DB seeds; fall back to config only if DB empty.
-        ids = database.enabled_seed_ids(conn)
-        if ids:
-            return ids
-        if cfg.seeds:
-            database.import_seed_ids(conn, list(cfg.seeds))
-            return database.enabled_seed_ids(conn)
-        return []
+        return database.enabled_seed_ids(conn)

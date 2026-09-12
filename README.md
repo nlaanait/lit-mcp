@@ -74,7 +74,7 @@ Seeds live in SQLite. Agents should manage them via MCP—do **not** ask users t
 | `remove_seed` | Delete by `seed_id` or `s2_id` |
 | `set_seed_enabled` | Disable/enable without deleting |
 
-On `my-lit ingest`, enabled DB seeds drive Semantic Scholar recommendations. Any leftover `seeds:` entries in `config.yaml` are imported into the DB once (legacy bootstrap only).
+On `my-lit ingest`, enabled DB seeds drive Semantic Scholar recommendations.
 
 ## API keys (all free)
 

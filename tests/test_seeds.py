@@ -63,15 +63,14 @@ def test_add_seed_service_without_network(workspace, monkeypatch):
     assert len(listed) == 1
 
 
-def test_active_seed_ids_imports_config(workspace):
+def test_active_seed_ids_from_db(workspace):
     cfg, db = workspace
-    cfg.seeds[:] = ["configseed1", "configseed2"]
-    ids = seed_svc.active_seed_ids(cfg, db=db)
-    assert ids == ["configseed1", "configseed2"]
-    ids2 = seed_svc.active_seed_ids(cfg, db=db)
-    assert ids2 == ["configseed1", "configseed2"]
     with db.session() as conn:
-        assert len(db.list_seeds(conn)) == 2
+        db.add_seed(conn, s2_id="dbseed1", title="One")
+        db.add_seed(conn, s2_id="dbseed2", title="Two")
+        db.set_seed_enabled(conn, db.get_seed_by_s2_id(conn, "dbseed2")["id"], False)
+    ids = seed_svc.active_seed_ids(cfg, db=db)
+    assert ids == ["dbseed1"]
 
 
 @pytest.mark.asyncio

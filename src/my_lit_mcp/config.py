@@ -73,7 +73,6 @@ class AppConfig:
     db_path: Path
     pdf_cache_dir: Path
     queries: list[QueryConfig]
-    seeds: list[str]
     ranking: RankingConfig
     pdf: PdfConfig
     openalex: OpenAlexConfig
@@ -156,7 +155,6 @@ def load_config(config_path: Path | None = None) -> AppConfig:
         db_path=_path_or_default(raw.get("db_path"), db_default),
         pdf_cache_dir=_path_or_default(raw.get("pdf_cache_dir"), pdf_default),
         queries=queries,
-        seeds=[str(s) for s in (raw.get("seeds") or [])],
         ranking=RankingConfig(
             include_terms=list(ranking_raw.get("include_terms") or []),
             exclude_terms=list(ranking_raw.get("exclude_terms") or []),

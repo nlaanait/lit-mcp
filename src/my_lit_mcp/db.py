@@ -518,13 +518,3 @@ class Database:
             "SELECT s2_id FROM seeds WHERE enabled = 1 ORDER BY id ASC"
         ).fetchall()
         return [r["s2_id"] for r in rows]
-
-    def import_seed_ids(self, conn: sqlite3.Connection, s2_ids: list[str]) -> int:
-        """Insert missing seed IDs (no metadata). Returns count inserted."""
-        inserted = 0
-        for s2_id in s2_ids:
-            if not s2_id or self.get_seed_by_s2_id(conn, s2_id):
-                continue
-            self.add_seed(conn, s2_id=s2_id)
-            inserted += 1
-        return inserted
