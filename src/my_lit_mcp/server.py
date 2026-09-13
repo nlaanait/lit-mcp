@@ -26,7 +26,7 @@ server = MCPServer(
 _NOT_READY = {
     "error": "workspace_not_ready",
     "hint": (
-        "Call ensure_workspace(project_root=<absolute path to the Cursor/workspace project>) "
+        "Call ensure_workspace(project_root=<absolute path to the host workspace/project>) "
         "to create .my-lit (config, papers.db, pdfs), then retry."
     ),
 }

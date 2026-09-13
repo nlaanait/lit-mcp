@@ -18,9 +18,11 @@ export NCBI_API_KEY=...              # free; improves PubMed rate limits
 # choose a project data dir once (prompts if omitted on a TTY)
 uv run my-lit init --data-dir .my-lit
 
-# wire MCP for this machine (gitignored; do not commit)
-cp mcp.example.json .mcp.json
-# edit .mcp.json: set --directory, MY_LIT_DATA_DIR, and optional API env vars
+# wire MCP once at user/global scope in your MCP host (recommended):
+# copy mcp.example.json into the host's user MCP config, then edit:
+#   absolute uv path, --directory = this my-lit-mcp install, optional API keys
+# omit MY_LIT_DATA_DIR (or set it via host workspace interpolation); agents call
+# ensure_workspace(project_root=...) so each project uses its own .my-lit/
 
 # optionally edit queries in <data-dir>/config.yaml; manage seeds via MCP, not YAML
 uv run my-lit ingest
@@ -60,19 +62,30 @@ Schedule ingest with the LaunchAgent example in [`launchd/com.my-lit.ingest.plis
 
 ## MCP registration
 
-`.mcp.json` is **local and gitignored** (absolute paths and keys). Commit only [`mcp.example.json`](mcp.example.json).
+**Intended split:** user-/global-scoped MCP server + project-scoped literature DB.
 
-```bash
-cp mcp.example.json .mcp.json
-```
+| Concern | Where | Why |
+|---------|-------|-----|
+| MCP server process | Your MCP host’s **user/global** config | One install of `my-lit-mcp`, available in every workspace |
+| Papers / seeds / PDFs | `<host-project>/.my-lit/` | Each project keeps its own corpus |
 
-In `.mcp.json`, set:
+Commit only [`mcp.example.json`](mcp.example.json). Absolute paths and API keys belong in local (gitignored) MCP config—not in the repo. Hosts differ on file location (user vs project vs UI); use the host’s docs. Common shapes: user/global `mcp.json`, project `.mcp.json`, or an IDE settings UI.
 
-- `args` `--directory` to this repo’s absolute path
-- `MY_LIT_DATA_DIR` to the same absolute path you passed to `my-lit init` (e.g. `…/my-lit-mcp/.my-lit`)
-- Optional API env vars (same values as your shell)
+### Recommended: user-/global-scoped MCP
 
-Works with any stdio MCP host.
+1. Copy [`mcp.example.json`](mcp.example.json) into your host’s **user/global** MCP config (not into every project).
+2. Edit:
+   - `command` to an absolute `uv` path if `uv` is not on the host’s default PATH (e.g. `~/.local/bin/uv`)
+   - `args` `--directory` to this **my-lit-mcp install** (the package that runs the server)—not the host project
+   - Optional API env vars (same values as your shell)
+3. Prefer **omitting** `MY_LIT_DATA_DIR` in user/global config. Agents call `ensure_workspace(project_root=<absolute host project path>)`, which creates/binds `<project>/.my-lit`.
+4. If your host supports workspace-path interpolation in env values, you may set `MY_LIT_DATA_DIR` to that project’s `.my-lit` instead (still per open workspace—never a single hard-coded project path).
+
+Do **not** hard-code one project’s absolute `.my-lit` path in user/global MCP config—that pins every workspace to a single DB.
+
+If the same server name is also defined at project scope, many hosts let **project config win**. Prefer only the user/global entry for this layout.
+
+Reload or restart MCP in your host after editing config.
 
 ```bash
 uv run my-lit-mcp
@@ -80,11 +93,11 @@ uv run my-lit-mcp
 
 MCP tools: `ensure_workspace`, `list_queries`, `list_seeds` / `resolve_seed` / `add_seed` / `remove_seed` / `set_seed_enabled`, `search_local`, `search_fulltext`, `get_paper`, `get_fulltext`, `new_since`, `must_read`, `similar_to`, `mark_feedback`, `pipeline_status`.
 
-<<<<<<< HEAD
-Agent guidance for this repo lives in [`AGENTS.example.md`](AGENTS.example.md).
-=======
-Agents should call `ensure_workspace(project_root=<workspace>)` first; it creates `.my-lit` when missing. See [`AGENTS.md`](AGENTS.md).
->>>>>>> e2c45cf (update agents.md and ensure_workspace for project-based lit db)
+Agents should call `ensure_workspace(project_root=<host workspace>)` first; it creates that project’s `.my-lit` when missing. See [`AGENTS.md`](AGENTS.md).
+
+### Optional: project-only MCP
+
+For a single-repo install, copy `mcp.example.json` into that project’s MCP config (e.g. `.mcp.json` or the host’s project MCP path). You may set `MY_LIT_DATA_DIR` to that project’s `.my-lit` absolute path when the config will never be shared across projects.
 
 ## Seed management (MCP, not config files)
 
@@ -113,7 +126,7 @@ On `my-lit ingest`, enabled DB seeds drive Semantic Scholar recommendations.
 
 **NCBI / PubMed:** create a free NCBI account and generate an API key under account settings. Pass it as `NCBI_API_KEY`; it is forwarded to `esearch` / `efetch` as `api_key`.
 
-Put the same env vars in your shell profile **and** in the `env` block of `.mcp.json` so CLI ingest and the MCP server share them. If any are unset, ingest still runs where possible, with the limits in the table above.
+Put the same env vars in your shell profile **and** in the MCP server `env` block so CLI ingest and the MCP server share them. If any are unset, ingest still runs where possible, with the limits in the table above.
 
 ## OpenAlex free-tier rule
 

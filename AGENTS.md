@@ -8,9 +8,20 @@ The local database (`papers.db`) and PDF cache contain curated, scored, and full
 
 ---
 
+## Scope: user/global MCP, project DB
+
+| Layer | Scope | Meaning |
+|-------|-------|---------|
+| MCP server (`my-lit-pipeline`) | **User/global** (host MCP config) | One server binary/install for all workspaces |
+| Literature corpus (`.my-lit/`) | **Project** (`<host-project>/.my-lit`) | Each host repo has its own `papers.db`, seeds, PDFs |
+
+Never assume a hard-coded absolute `MY_LIT_DATA_DIR` from a single project. Bind tools to the **open host workspace** via `ensure_workspace(project_root=...)`. If the host already injects a per-workspace data dir, that is fine; do not invent IDE-specific paths in tool calls.
+
+---
+
 ## Bootstrap: ensure project data exists
 
-Literature data is **project-scoped** under `.my-lit/` (not a global Application Support path).
+Literature data is **project-scoped** under `.my-lit/` (not a global Application Support path, and not shared across unrelated repos).
 
 **Before any other literature MCP tool**, call:
 
@@ -20,7 +31,7 @@ ensure_workspace(project_root=<absolute path to the current workspace/repo>)
 
 - If `.my-lit` (config + DB + pdfs) is missing, this **creates** it.
 - If it already exists, this is a no-op (`created: false`).
-- Always pass the **host project** path (the repo the user is working in), not the `my-lit-mcp` package path unless that *is* the project.
+- Always pass the **host project** path (the repo the user is working in), not the `my-lit-mcp` package/install path unless that *is* the project.
 - If another tool returns `error: workspace_not_ready`, call `ensure_workspace` with `project_root` and retry.
 
 Do **not** ask the user to run `my-lit init` manually when you can call `ensure_workspace`.
@@ -56,7 +67,7 @@ Seeds drive recommendations during pipeline ingestion runs:
 - **`pipeline_status()`**: Check database counts, last ingestion run, and daily OpenAlex call quotas.
 
 ### 4. Optional API / ingest env vars
-These are optional but improve ingest rate limits and OA PDF resolution. They may be set in the shell and/or the MCP server `env` block (e.g. `.mcp.json`):
+These are optional but improve ingest rate limits and OA PDF resolution. They may be set in the shell and/or the MCP server `env` block in the host’s user/global MCP config:
 
 | Env var | Effect when missing |
 |---------|---------------------|
@@ -65,7 +76,7 @@ These are optional but improve ingest rate limits and OA PDF resolution. They ma
 | `SEMANTIC_SCHOLAR_API_KEY` | S2 works anonymously but is more likely to hit 429s |
 | `NCBI_API_KEY` | PubMed runs at the lower unauthenticated rate |
 
-**When any of these are unset**, tell the user explicitly which ones are missing and what that limits (do not silently assume keys are configured). Suggest adding them to the MCP `env` block and the shell profile so CLI ingest and MCP share the same values.
+**When any of these are unset**, tell the user explicitly which ones are missing and what that limits (do not silently assume keys are configured). Suggest adding them to the **user/global** MCP `env` block and the shell profile so CLI ingest and MCP share the same values. Prefer omitting a hard-coded `MY_LIT_DATA_DIR` and using `ensure_workspace(project_root=...)`; do not suggest pinning user/global MCP config to one project’s absolute data path.
 
 ---
 

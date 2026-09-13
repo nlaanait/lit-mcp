@@ -1,10 +1,14 @@
 {
   "mcpServers": {
     "my-lit-pipeline": {
-      "command": "uv",
-      "args": ["--directory", "/ABSOLUTE/PATH/TO/my-lit-mcp", "run", "my-lit-mcp"],
+      "command": "/ABSOLUTE/PATH/TO/uv",
+      "args": [
+        "--directory",
+        "/ABSOLUTE/PATH/TO/my-lit-mcp",
+        "run",
+        "my-lit-mcp"
+      ],
       "env": {
-        "MY_LIT_DATA_DIR": "/ABSOLUTE/PATH/TO/PROJECT/.my-lit",
         "UNPAYWALL_EMAIL": "you@example.com",
         "OPENALEX_API_KEY": "",
         "SEMANTIC_SCHOLAR_API_KEY": "",

@@ -320,8 +320,8 @@ def workspace_is_ready(data_dir: Path | None = None) -> bool:
 
 
 def ensure_workspace(
-    project_root: Path | None = None,
-    data_dir: Path | None = None,
+    project_root: Path | str | None = None,
+    data_dir: Path | str | None = None,
     force: bool = False,
 ) -> tuple[AppConfig, bool]:
     """Idempotently create project-scoped data if missing.
@@ -334,10 +334,11 @@ def ensure_workspace(
     3. Existing ``MY_LIT_DATA_DIR`` / marker / conventional ``.my-lit``
     4. ``cwd / .my-lit`` as last resort
     """
-    root = (project_root or Path.cwd()).resolve()
+    root = Path(project_root).expanduser().resolve() if project_root else Path.cwd().resolve()
+    data_path = Path(data_dir).expanduser().resolve() if data_dir else None
 
-    if data_dir is not None:
-        resolved = data_dir.expanduser().resolve()
+    if data_path is not None:
+        resolved = data_path
     elif project_root is not None:
         resolved = root / DEFAULT_DATA_DIRNAME
     elif os.environ.get("MY_LIT_DATA_DIR"):

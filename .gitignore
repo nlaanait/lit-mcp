@@ -11,6 +11,7 @@ wheels/
 
 # Local MCP host config (machine-specific absolute paths); copy from mcp.example.json
 .mcp.json
+.cursor/mcp.json
 
 # Project-scoped literature data (path chosen by `my-lit init`)
 .my-lit/
