@@ -29,7 +29,7 @@ uv run my-lit status
 
 ## Project data (not global)
 
-Config, DB, and PDFs live under the directory you pass to `init`—not Application Support or a shared home path.
+Config, DB, and PDFs live under the directory you pass to `init`.
 
 `my-lit init --data-dir <path>`:
 
@@ -72,7 +72,7 @@ In `.mcp.json`, set:
 - `MY_LIT_DATA_DIR` to the same absolute path you passed to `my-lit init` (e.g. `…/my-lit-mcp/.my-lit`)
 - Optional API env vars (same values as your shell)
 
-Works with Cursor, Claude Desktop / Claude Code, VS Code, Windsurf, or any stdio MCP host.
+Works with any stdio MCP host.
 
 ```bash
 uv run my-lit-mcp
@@ -80,11 +80,11 @@ uv run my-lit-mcp
 
 MCP tools: `list_queries`, `list_seeds` / `resolve_seed` / `add_seed` / `remove_seed` / `set_seed_enabled`, `search_local`, `search_fulltext`, `get_paper`, `get_fulltext`, `new_since`, `must_read`, `similar_to`, `mark_feedback`, `pipeline_status`.
 
-Agent guidance for this repo lives in [`AGENTS.md`](AGENTS.md).
+Agent guidance for this repo lives in [`AGENTS.example.md`](AGENTS.example.md).
 
 ## Seed management (MCP, not config files)
 
-Seeds live in SQLite. Agents should manage them via MCP—do **not** ask users to edit YAML for seeds.
+Seeds live in SQLite. Agents should manage them via MCP.
 
 | Tool | Purpose |
 |------|---------|
@@ -113,7 +113,7 @@ Put the same env vars in your shell profile **and** in the `env` block of `.mcp.
 
 ## OpenAlex free-tier rule
 
-OpenAlex search uses a free API key and a hard daily call cap (`openalex.max_search_calls_per_day`, default 800). The pipeline stops OpenAlex for the day when the cap or HTTP 429 is hit. Do not enable prepaid OpenAlex billing.
+OpenAlex search uses a free API key and a hard daily call cap (`openalex.max_search_calls_per_day`, default 800). The pipeline stops OpenAlex for the day when the cap or HTTP 429 is hit.  
 
 ## Ranking
 
