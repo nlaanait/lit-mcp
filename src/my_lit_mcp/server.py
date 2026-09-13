@@ -1,32 +1,95 @@
 from __future__ import annotations
 
 import json
+import os
+from pathlib import Path
 
 from mcp.server.mcpserver import MCPServer
 
-from my_lit_mcp.config import load_config
+from my_lit_mcp.config import (
+    ensure_workspace as ensure_workspace_impl,
+    load_config,
+)
 from my_lit_mcp.db import Database
 from my_lit_mcp import seeds as seed_svc
 
 server = MCPServer(
     name="my-lit-mcp",
     instructions=(
-        "Local literature corpus tools. Manage seed papers and search/read papers "
-        "already ingested into the SQLite pipeline. Prefer seed MCP tools over "
-        "editing config files."
+        "Local literature corpus tools for the current project. "
+        "Before search/seed tools, call ensure_workspace(project_root=<workspace absolute path>) "
+        "so a missing .my-lit data directory is created. "
+        "Prefer seed MCP tools over editing config files."
     ),
 )
 
+_NOT_READY = {
+    "error": "workspace_not_ready",
+    "hint": (
+        "Call ensure_workspace(project_root=<absolute path to the Cursor/workspace project>) "
+        "to create .my-lit (config, papers.db, pdfs), then retry."
+    ),
+}
+
 
 def _db():
-    cfg = load_config()
+    try:
+        cfg = load_config()
+    except FileNotFoundError:
+        # If MY_LIT_DATA_DIR is set (typical .mcp.json) but not created yet, bootstrap it.
+        if os.environ.get("MY_LIT_DATA_DIR"):
+            cfg, _ = ensure_workspace_impl(data_dir=Path(os.environ["MY_LIT_DATA_DIR"]))
+        else:
+            raise
     return cfg, Database(cfg.db_path)
+
+
+def _require_db():
+    try:
+        return _db(), None
+    except FileNotFoundError:
+        return None, json.dumps(_NOT_READY, indent=2)
+
+
+@server.tool()
+def ensure_workspace(
+    project_root: str | None = None,
+    data_dir: str | None = None,
+    force: bool = False,
+) -> str:
+    """Create project-scoped .my-lit (config, DB, PDFs) if missing. Call this first in a new project.
+
+    Pass project_root as the absolute path of the workspace/repo using this MCP.
+    Defaults to <project_root>/.my-lit unless data_dir or MY_LIT_DATA_DIR is set.
+    Idempotent: safe when already initialized.
+    """
+    cfg, created = ensure_workspace_impl(
+        project_root=Path(project_root) if project_root else None,
+        data_dir=Path(data_dir) if data_dir else None,
+        force=force,
+    )
+    Database(cfg.db_path)
+    return json.dumps(
+        {
+            "ok": True,
+            "created": created,
+            "config": str(cfg.config_path),
+            "db": str(cfg.db_path),
+            "pdf_cache": str(cfg.pdf_cache_dir),
+            "data_dir": str(cfg.config_path.parent),
+            "project_root": str(Path(project_root).resolve()) if project_root else None,
+        },
+        indent=2,
+    )
 
 
 @server.tool()
 def list_queries() -> str:
     """List configured ingest queries."""
-    cfg, _ = _db()
+    pair, err = _require_db()
+    if err:
+        return err
+    cfg, _ = pair
     return json.dumps(
         [
             {
@@ -44,7 +107,10 @@ def list_queries() -> str:
 @server.tool()
 def list_seeds(enabled_only: bool = False) -> str:
     """List seed papers stored in the local DB (preferred over config.yaml)."""
-    cfg, db = _db()
+    pair, err = _require_db()
+    if err:
+        return err
+    cfg, db = pair
     rows = seed_svc.list_seeds(cfg, enabled_only=enabled_only, db=db)
     return json.dumps(rows, indent=2, default=str)
 
@@ -58,7 +124,10 @@ def resolve_seed(
     paper_id: int | None = None,
 ) -> str:
     """Look up seed candidate metadata without saving. Use before add_seed if unsure."""
-    cfg, db = _db()
+    pair, err = _require_db()
+    if err:
+        return err
+    cfg, db = pair
     result = seed_svc.resolve_seed_candidate(
         cfg,
         s2_id=s2_id,
@@ -82,7 +151,10 @@ def add_seed(
     enabled: bool = True,
 ) -> str:
     """Add or update a seed paper in the DB. Prefer s2_id or doi; title_query returns candidates."""
-    cfg, db = _db()
+    pair, err = _require_db()
+    if err:
+        return err
+    cfg, db = pair
     result = seed_svc.add_seed(
         cfg,
         s2_id=s2_id,
@@ -100,7 +172,10 @@ def add_seed(
 @server.tool()
 def remove_seed(seed_id: int | None = None, s2_id: str | None = None) -> str:
     """Delete a seed by local seed_id or Semantic Scholar s2_id."""
-    cfg, db = _db()
+    pair, err = _require_db()
+    if err:
+        return err
+    cfg, db = pair
     if seed_id is None and not s2_id:
         return json.dumps({"error": "missing_input", "hint": "Provide seed_id or s2_id"})
     result = seed_svc.remove_seed(cfg, seed_id=seed_id, s2_id=s2_id, db=db)
@@ -110,7 +185,10 @@ def remove_seed(seed_id: int | None = None, s2_id: str | None = None) -> str:
 @server.tool()
 def set_seed_enabled(seed_id: int, enabled: bool = True) -> str:
     """Enable or disable a seed without deleting it."""
-    cfg, db = _db()
+    pair, err = _require_db()
+    if err:
+        return err
+    cfg, db = pair
     result = seed_svc.set_seed_enabled(cfg, seed_id, enabled, db=db)
     return json.dumps(result, indent=2, default=str)
 
@@ -124,7 +202,10 @@ def search_local(
     limit: int = 20,
 ) -> str:
     """Search title/abstract/fulltext in the local corpus."""
-    _, db = _db()
+    pair, err = _require_db()
+    if err:
+        return err
+    _, db = pair
     with db.session() as conn:
         rows = db.search(
             conn,
@@ -141,7 +222,10 @@ def search_local(
 @server.tool()
 def search_fulltext(query: str, source: str | None = None, limit: int = 20) -> str:
     """Search only parsed PDF body text."""
-    _, db = _db()
+    pair, err = _require_db()
+    if err:
+        return err
+    _, db = pair
     with db.session() as conn:
         rows = db.search(conn, query, fulltext_only=True, source=source, limit=limit)
     return json.dumps(rows, indent=2, default=str)
@@ -150,7 +234,10 @@ def search_fulltext(query: str, source: str | None = None, limit: int = 20) -> s
 @server.tool()
 def get_paper(paper_id: int) -> str:
     """Fetch one paper with feedback and parse status."""
-    _, db = _db()
+    pair, err = _require_db()
+    if err:
+        return err
+    _, db = pair
     with db.session() as conn:
         row = db.get_paper(conn, paper_id)
     if not row:
@@ -161,7 +248,10 @@ def get_paper(paper_id: int) -> str:
 @server.tool()
 def get_fulltext(paper_id: int, max_chars: int = 20000) -> str:
     """Return stored full text (truncated)."""
-    _, db = _db()
+    pair, err = _require_db()
+    if err:
+        return err
+    _, db = pair
     with db.session() as conn:
         row = db.get_fulltext(conn, paper_id)
     if not row:
@@ -177,7 +267,10 @@ def get_fulltext(paper_id: int, max_chars: int = 20000) -> str:
 @server.tool()
 def new_since(since: str, limit: int = 50) -> str:
     """Papers ingested after an ISO timestamp."""
-    _, db = _db()
+    pair, err = _require_db()
+    if err:
+        return err
+    _, db = pair
     with db.session() as conn:
         rows = db.papers_since(conn, since, limit=limit)
     return json.dumps(rows, indent=2, default=str)
@@ -186,7 +279,10 @@ def new_since(since: str, limit: int = 50) -> str:
 @server.tool()
 def must_read(limit: int = 50) -> str:
     """High-score or must_read-labeled papers."""
-    cfg, db = _db()
+    pair, err = _require_db()
+    if err:
+        return err
+    cfg, db = pair
     with db.session() as conn:
         rows = db.must_read(conn, cfg.ranking.must_read_threshold, limit=limit)
     return json.dumps(rows, indent=2, default=str)
@@ -195,7 +291,10 @@ def must_read(limit: int = 50) -> str:
 @server.tool()
 def similar_to(paper_id: int, limit: int = 10) -> str:
     """Local title-keyword similarity."""
-    _, db = _db()
+    pair, err = _require_db()
+    if err:
+        return err
+    _, db = pair
     with db.session() as conn:
         rows = db.similar_to(conn, paper_id, limit=limit)
     return json.dumps(rows, indent=2, default=str)
@@ -207,7 +306,10 @@ def mark_feedback(paper_id: int, label: str, notes: str | None = None) -> str:
     allowed = {"relevant", "not_relevant", "must_read"}
     if label not in allowed:
         return json.dumps({"error": "invalid_label", "allowed": sorted(allowed)})
-    _, db = _db()
+    pair, err = _require_db()
+    if err:
+        return err
+    _, db = pair
     with db.session() as conn:
         if not db.get_paper(conn, paper_id):
             return json.dumps({"error": "not_found", "paper_id": paper_id})
@@ -218,7 +320,10 @@ def mark_feedback(paper_id: int, label: str, notes: str | None = None) -> str:
 @server.tool()
 def pipeline_status() -> str:
     """Last run, OpenAlex daily calls, PDF parse counts, seed count."""
-    cfg, db = _db()
+    pair, err = _require_db()
+    if err:
+        return err
+    cfg, db = pair
     with db.session() as conn:
         summary = db.status_summary(conn)
         summary["seeds"] = len(db.list_seeds(conn))

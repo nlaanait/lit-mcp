@@ -115,7 +115,8 @@ def default_data_dir() -> Path:
         return local
     raise FileNotFoundError(
         "No project data directory configured. "
-        "Run `my-lit init --data-dir <path>` once to choose where config, DB, and PDFs live."
+        "Call MCP ensure_workspace(project_root=...) or run "
+        "`my-lit init --data-dir <path>` once."
     )
 
 
@@ -288,7 +289,7 @@ def init_workspace(
         )
 
     resolved.mkdir(parents=True, exist_ok=True)
-    os.environ.setdefault("MY_LIT_DATA_DIR", str(resolved))
+    os.environ["MY_LIT_DATA_DIR"] = str(resolved)
 
     if config_path is not None:
         dest = config_path.expanduser().resolve()
@@ -307,3 +308,51 @@ def init_workspace(
     cfg.db_path.parent.mkdir(parents=True, exist_ok=True)
     cfg.pdf_cache_dir.mkdir(parents=True, exist_ok=True)
     return cfg
+
+
+def workspace_is_ready(data_dir: Path | None = None) -> bool:
+    """True when the resolved data dir already has a config.yaml."""
+    try:
+        path = (data_dir or default_data_dir()) / "config.yaml"
+    except FileNotFoundError:
+        return False
+    return path.is_file()
+
+
+def ensure_workspace(
+    project_root: Path | None = None,
+    data_dir: Path | None = None,
+    force: bool = False,
+) -> tuple[AppConfig, bool]:
+    """Idempotently create project-scoped data if missing.
+
+    Returns ``(config, created)`` where ``created`` is True when init ran.
+
+    Resolution:
+    1. Explicit ``data_dir``
+    2. ``project_root / .my-lit`` when ``project_root`` is given
+    3. Existing ``MY_LIT_DATA_DIR`` / marker / conventional ``.my-lit``
+    4. ``cwd / .my-lit`` as last resort
+    """
+    root = (project_root or Path.cwd()).resolve()
+
+    if data_dir is not None:
+        resolved = data_dir.expanduser().resolve()
+    elif project_root is not None:
+        resolved = root / DEFAULT_DATA_DIRNAME
+    elif os.environ.get("MY_LIT_DATA_DIR"):
+        resolved = Path(os.environ["MY_LIT_DATA_DIR"]).expanduser().resolve()
+    else:
+        try:
+            resolved = default_data_dir()
+        except FileNotFoundError:
+            resolved = root / DEFAULT_DATA_DIRNAME
+
+    config_path = resolved / "config.yaml"
+    if config_path.is_file() and not force:
+        os.environ["MY_LIT_DATA_DIR"] = str(resolved)
+        write_project_marker(resolved, project_root=root)
+        return load_config(config_path), False
+
+    cfg = init_workspace(data_dir=resolved, force=force, project_root=root)
+    return cfg, True

@@ -8,10 +8,30 @@ The local database (`papers.db`) and PDF cache contain curated, scored, and full
 
 ---
 
+## Bootstrap: ensure project data exists
+
+Literature data is **project-scoped** under `.my-lit/` (not a global Application Support path).
+
+**Before any other literature MCP tool**, call:
+
+```text
+ensure_workspace(project_root=<absolute path to the current workspace/repo>)
+```
+
+- If `.my-lit` (config + DB + pdfs) is missing, this **creates** it.
+- If it already exists, this is a no-op (`created: false`).
+- Always pass the **host project** path (the repo the user is working in), not the `my-lit-mcp` package path unless that *is* the project.
+- If another tool returns `error: workspace_not_ready`, call `ensure_workspace` with `project_root` and retry.
+
+Do **not** ask the user to run `my-lit init` manually when you can call `ensure_workspace`.
+
+---
+
 ## Tool Selection & Usage Hierarchy
 
 ### 1. Searching & Inspecting Local Literature
 Always query the local corpus first when asked about relevant literature, techniques, or topics:
+- **`ensure_workspace(project_root, data_dir, force)`**: Create `.my-lit` if missing (see Bootstrap above).
 - **`search_local(query, source, label, since, limit)`**: Primary tool to search titles, abstracts, and full text in the local SQLite corpus.
 - **`search_fulltext(query, source, limit)`**: Use when looking for specific methodologies, phrases, benchmarks, or details within parsed PDF body text.
 - **`get_paper(paper_id)`**: Inspect complete metadata, abstract, score, and feedback status for a specific local paper.
@@ -76,4 +96,3 @@ Whenever you complete a literature task, search, or review, **always proactively
 ### 3. After Stale or Zero-Result Searches
 - **Pipeline Refresh**: If a local search yields few or outdated results, propose checking `pipeline_status()`, verifying active queries with `list_queries()`, or running `uv run my-lit ingest` to refresh the corpus.
 - **Query / Seed Expansion**: Suggest adding new search queries or seed DOIs/arXiv IDs to cover the missing subfield.
-

@@ -78,9 +78,13 @@ Works with any stdio MCP host.
 uv run my-lit-mcp
 ```
 
-MCP tools: `list_queries`, `list_seeds` / `resolve_seed` / `add_seed` / `remove_seed` / `set_seed_enabled`, `search_local`, `search_fulltext`, `get_paper`, `get_fulltext`, `new_since`, `must_read`, `similar_to`, `mark_feedback`, `pipeline_status`.
+MCP tools: `ensure_workspace`, `list_queries`, `list_seeds` / `resolve_seed` / `add_seed` / `remove_seed` / `set_seed_enabled`, `search_local`, `search_fulltext`, `get_paper`, `get_fulltext`, `new_since`, `must_read`, `similar_to`, `mark_feedback`, `pipeline_status`.
 
+<<<<<<< HEAD
 Agent guidance for this repo lives in [`AGENTS.example.md`](AGENTS.example.md).
+=======
+Agents should call `ensure_workspace(project_root=<workspace>)` first; it creates `.my-lit` when missing. See [`AGENTS.md`](AGENTS.md).
+>>>>>>> e2c45cf (update agents.md and ensure_workspace for project-based lit db)
 
 ## Seed management (MCP, not config files)
 

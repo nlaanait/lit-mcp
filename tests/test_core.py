@@ -115,6 +115,7 @@ async def test_mcp_tools_registered():
     tools = await server.list_tools()
     names = {t.name for t in tools}
     assert {
+        "ensure_workspace",
         "list_queries",
         "list_seeds",
         "resolve_seed",

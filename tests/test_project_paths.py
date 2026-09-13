@@ -7,6 +7,7 @@ import pytest
 from my_lit_mcp.config import (
     MARKER_NAME,
     default_data_dir,
+    ensure_workspace,
     init_workspace,
     load_config,
 )
@@ -45,3 +46,22 @@ def test_init_writes_project_marker_and_scoped_paths(
     assert default_data_dir() == data_dir.resolve()
     loaded = load_config()
     assert loaded.db_path == data_dir / "papers.db"
+
+
+def test_ensure_workspace_creates_dot_my_lit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.delenv("MY_LIT_DATA_DIR", raising=False)
+    monkeypatch.delenv("MY_LIT_CONFIG", raising=False)
+    monkeypatch.delenv("MY_LIT_DB", raising=False)
+    monkeypatch.delenv("MY_LIT_PDF_DIR", raising=False)
+    monkeypatch.chdir(tmp_path)
+
+    cfg, created = ensure_workspace(project_root=tmp_path)
+    assert created is True
+    assert (tmp_path / ".my-lit" / "config.yaml").is_file()
+    assert cfg.db_path == tmp_path / ".my-lit" / "papers.db"
+
+    cfg2, created2 = ensure_workspace(project_root=tmp_path)
+    assert created2 is False
+    assert cfg2.config_path == cfg.config_path
