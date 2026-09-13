@@ -1,8 +1,8 @@
 # my-lit-mcp
 
-Own a free literature pipeline on your Mac: ingest from Semantic Scholar, PubMed, arXiv, and OpenAlex (free daily allowance), store in local SQLite, download OA PDFs, extract full text with PyMuPDF, rank with your rules, and expose it to any MCP host over stdio.
+Own a free literature pipeline: ingest from Semantic Scholar, PubMed, arXiv, and OpenAlex (free daily allowance), store in project-local SQLite, download OA PDFs, extract full text with PyMuPDF, rank with your rules, and expose it to any MCP host over stdio.
 
-## Mac setup
+## Setup
 
 ```bash
 brew install uv
@@ -15,52 +15,72 @@ export OPENALEX_API_KEY=...          # free; stay within daily free search allow
 export SEMANTIC_SCHOLAR_API_KEY=...  # free; improves rate limits
 export NCBI_API_KEY=...              # free; improves PubMed rate limits
 
-uv run my-lit init
-# optionally edit queries in config.yaml; manage seeds via MCP (add_seed), not YAML
+# choose a project data dir once (prompts if omitted on a TTY)
+uv run my-lit init --data-dir .my-lit
+
+# wire MCP for this machine (gitignored; do not commit)
+cp mcp.example.json .mcp.json
+# edit .mcp.json: set --directory, MY_LIT_DATA_DIR, and optional API env vars
+
+# optionally edit queries in <data-dir>/config.yaml; manage seeds via MCP, not YAML
 uv run my-lit ingest
 uv run my-lit status
 ```
 
-Data defaults (macOS):
+## Project data (not global)
 
-- Config: `~/Library/Application Support/my-lit-mcp/config.yaml`
-- DB: `~/Library/Application Support/my-lit-mcp/papers.db`
-- PDFs: `~/Library/Application Support/my-lit-mcp/pdfs`
+Config, DB, and PDFs live under the directory you pass to `init`—not Application Support or a shared home path.
 
-Override with `MY_LIT_CONFIG`, `MY_LIT_DB`, `MY_LIT_PDF_DIR`, or `MY_LIT_DATA_DIR`.
+`my-lit init --data-dir <path>`:
+
+1. Creates `<data-dir>/config.yaml`, `papers.db`, and `pdfs/`
+2. Writes `.my-lit-path` in the project root so later CLI runs resolve the same directory
+
+| Path | Role |
+|------|------|
+| `<data-dir>/config.yaml` | Queries, ranking, rate limits |
+| `<data-dir>/papers.db` | Papers, seeds, feedback, full text |
+| `<data-dir>/pdfs/` | OA PDF cache |
+| `.my-lit-path` | Marker pointing at `<data-dir>` (gitignored) |
+
+Suggested: `./.my-lit` inside the repo (gitignored).
+
+**Resolution order:** `MY_LIT_DATA_DIR` → `.my-lit-path` → conventional `./.my-lit` if it already has `config.yaml`. Optional overrides: `MY_LIT_CONFIG`, `MY_LIT_DB`, `MY_LIT_PDF_DIR`.
 
 ## CLI
 
 | Command | Purpose |
 |---------|---------|
-| `my-lit init` | Create config + DB + PDF cache |
+| `my-lit init --data-dir <path>` | Create project-scoped config + DB + PDF cache; record path in `.my-lit-path` |
 | `my-lit ingest` | Fetch queries/seeds, Unpaywall enrich, score, optionally parse PDFs |
 | `my-lit parse` | Backfill OA PDF download + text extraction |
 | `my-lit status` | Counts, OpenAlex calls today, last run |
 
-Schedule ingest with the LaunchAgent example in [`launchd/com.my-lit.ingest.plist.example`](launchd/com.my-lit.ingest.plist.example).
+Schedule ingest with the LaunchAgent example in [`launchd/com.my-lit.ingest.plist.example`](launchd/com.my-lit.ingest.plist.example) (set `MY_LIT_DATA_DIR` there too).
 
-## Portable MCP registration
+## MCP registration
 
-Copy [`mcp.example.json`](mcp.example.json) into Claude Desktop / Claude Code / VS Code / Windsurf (or any stdio MCP host). Replace absolute paths and env values. This is **not** Cursor-specific.
+`.mcp.json` is **local and gitignored** (absolute paths and keys). Commit only [`mcp.example.json`](mcp.example.json).
+
+```bash
+cp mcp.example.json .mcp.json
+```
+
+In `.mcp.json`, set:
+
+- `args` `--directory` to this repo’s absolute path
+- `MY_LIT_DATA_DIR` to the same absolute path you passed to `my-lit init` (e.g. `…/my-lit-mcp/.my-lit`)
+- Optional API env vars (same values as your shell)
+
+Works with Cursor, Claude Desktop / Claude Code, VS Code, Windsurf, or any stdio MCP host.
 
 ```bash
 uv run my-lit-mcp
 ```
 
-MCP tools:
+MCP tools: `list_queries`, `list_seeds` / `resolve_seed` / `add_seed` / `remove_seed` / `set_seed_enabled`, `search_local`, `search_fulltext`, `get_paper`, `get_fulltext`, `new_since`, `must_read`, `similar_to`, `mark_feedback`, `pipeline_status`.
 
-- `list_queries`
-- `list_seeds` / `resolve_seed` / `add_seed` / `remove_seed` / `set_seed_enabled`
-- `search_local`
-- `search_fulltext`
-- `get_paper`
-- `get_fulltext`
-- `new_since`
-- `must_read`
-- `similar_to`
-- `mark_feedback`
-- `pipeline_status`
+Agent guidance for this repo lives in [`AGENTS.md`](AGENTS.md).
 
 ## Seed management (MCP, not config files)
 
@@ -89,7 +109,7 @@ On `my-lit ingest`, enabled DB seeds drive Semantic Scholar recommendations.
 
 **NCBI / PubMed:** create a free NCBI account and generate an API key under account settings. Pass it as `NCBI_API_KEY`; it is forwarded to `esearch` / `efetch` as `api_key`.
 
-Put the same env vars in your shell profile and in the `env` block of `mcp.example.json` so CLI ingest and the MCP server share them.
+Put the same env vars in your shell profile **and** in the `env` block of `.mcp.json` so CLI ingest and the MCP server share them. If any are unset, ingest still runs where possible, with the limits in the table above.
 
 ## OpenAlex free-tier rule
 

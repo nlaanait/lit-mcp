@@ -4,9 +4,7 @@
       "command": "uv",
       "args": ["--directory", "/ABSOLUTE/PATH/TO/my-lit-mcp", "run", "my-lit-mcp"],
       "env": {
-        "MY_LIT_DB": "/Users/YOU/Library/Application Support/my-lit-mcp/papers.db",
-        "MY_LIT_CONFIG": "/Users/YOU/Library/Application Support/my-lit-mcp/config.yaml",
-        "MY_LIT_PDF_DIR": "/Users/YOU/Library/Application Support/my-lit-mcp/pdfs",
+        "MY_LIT_DATA_DIR": "/ABSOLUTE/PATH/TO/PROJECT/.my-lit",
         "UNPAYWALL_EMAIL": "you@example.com",
         "OPENALEX_API_KEY": "",
         "SEMANTIC_SCHOLAR_API_KEY": "",

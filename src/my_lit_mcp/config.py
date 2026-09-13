@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-import platform
 import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -9,22 +8,115 @@ from typing import Any
 
 import yaml
 
-APP_NAME = "my-lit-mcp"
+MARKER_NAME = ".my-lit-path"
+DEFAULT_DATA_DIRNAME = ".my-lit"
+
+
+def package_root() -> Path:
+    return Path(__file__).resolve().parents[2]
+
+
+def example_config_path() -> Path:
+    return package_root() / "config.example.yaml"
+
+
+def _read_marker(marker: Path) -> Path | None:
+    try:
+        text = marker.read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    if not text:
+        return None
+    # First non-empty, non-comment line is the absolute data dir.
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        return Path(line).expanduser().resolve()
+    return None
+
+
+def find_project_marker(start: Path | None = None) -> Path | None:
+    """Walk up from start (cwd) and also check the package root for `.my-lit-path`."""
+    candidates: list[Path] = []
+    seen: set[Path] = set()
+
+    def add_chain(root: Path) -> None:
+        cur = root.resolve()
+        while True:
+            if cur not in seen:
+                seen.add(cur)
+                candidates.append(cur / MARKER_NAME)
+            if cur.parent == cur:
+                break
+            cur = cur.parent
+
+    add_chain(start or Path.cwd())
+    add_chain(package_root())
+
+    for marker in candidates:
+        if marker.is_file():
+            return marker
+    return None
+
+
+def find_local_data_dir(start: Path | None = None) -> Path | None:
+    """Find a conventional `<project>/.my-lit` data dir with config.yaml."""
+    seen: set[Path] = set()
+
+    def walk(root: Path):
+        cur = root.resolve()
+        while True:
+            if cur not in seen:
+                seen.add(cur)
+                candidate = cur / DEFAULT_DATA_DIRNAME
+                if (candidate / "config.yaml").is_file():
+                    yield candidate
+            if cur.parent == cur:
+                break
+            cur = cur.parent
+
+    for path in walk(start or Path.cwd()):
+        return path
+    for path in walk(package_root()):
+        return path
+    return None
+
+
+def write_project_marker(data_dir: Path, project_root: Path | None = None) -> Path:
+    """Persist the chosen data dir once so CLI/MCP resolve the same project paths."""
+    root = (project_root or Path.cwd()).resolve()
+    marker = root / MARKER_NAME
+    marker.write_text(
+        f"# Project-scoped my-lit data directory (set by `my-lit init`)\n{data_dir.resolve()}\n",
+        encoding="utf-8",
+    )
+    return marker
 
 
 def default_data_dir() -> Path:
+    """Resolve the project data directory (not a global Application Support path).
+
+    Order:
+    1. MY_LIT_DATA_DIR
+    2. Path recorded in a `.my-lit-path` marker (from `my-lit init`)
+    3. Conventional `<project>/.my-lit` if it already has config.yaml
+    4. Error — user must run init once with a path
+    """
     if os.environ.get("MY_LIT_DATA_DIR"):
         return Path(os.environ["MY_LIT_DATA_DIR"]).expanduser().resolve()
-    home = Path.home()
-    system = platform.system()
-    if system == "Darwin":
-        return home / "Library" / "Application Support" / APP_NAME
-    if system == "Windows":
-        return Path(os.environ.get("APPDATA", home / "AppData" / "Roaming")) / APP_NAME
-    xdg = os.environ.get("XDG_DATA_HOME")
-    if xdg:
-        return Path(xdg).expanduser().resolve() / APP_NAME
-    return home / ".local" / "share" / APP_NAME
+    marker = find_project_marker()
+    if marker is not None:
+        data_dir = _read_marker(marker)
+        if data_dir is not None:
+            return data_dir
+    local = find_local_data_dir()
+    if local is not None:
+        return local
+    raise FileNotFoundError(
+        "No project data directory configured. "
+        "Run `my-lit init --data-dir <path>` once to choose where config, DB, and PDFs live."
+    )
 
 
 @dataclass
@@ -95,14 +187,6 @@ class AppConfig:
         return os.environ.get("NCBI_API_KEY", "").strip()
 
 
-def package_root() -> Path:
-    return Path(__file__).resolve().parents[2]
-
-
-def example_config_path() -> Path:
-    return package_root() / "config.example.yaml"
-
-
 def resolve_config_path(explicit: Path | None = None) -> Path:
     if explicit is not None:
         return explicit.expanduser().resolve()
@@ -120,11 +204,11 @@ def _path_or_default(value: Any, default: Path) -> Path:
 def load_config(config_path: Path | None = None) -> AppConfig:
     path = resolve_config_path(config_path)
     if not path.exists():
-        raise FileNotFoundError(f"Config not found: {path}. Run `my-lit init` first.")
+        raise FileNotFoundError(f"Config not found: {path}. Run `my-lit init --data-dir <path>` first.")
     with path.open(encoding="utf-8") as fh:
         raw = yaml.safe_load(fh) or {}
 
-    data_dir = default_data_dir()
+    data_dir = path.parent
     db_default = (
         Path(os.environ["MY_LIT_DB"]).expanduser().resolve()
         if os.environ.get("MY_LIT_DB")
@@ -182,13 +266,43 @@ def load_config(config_path: Path | None = None) -> AppConfig:
     )
 
 
-def init_workspace(config_path: Path | None = None, force: bool = False) -> AppConfig:
-    data_dir = default_data_dir()
-    data_dir.mkdir(parents=True, exist_ok=True)
-    dest = resolve_config_path(config_path)
+def init_workspace(
+    data_dir: Path | None = None,
+    config_path: Path | None = None,
+    force: bool = False,
+    project_root: Path | None = None,
+) -> AppConfig:
+    """Create project-scoped config/DB/PDF dirs and record the path in `.my-lit`.
+
+    `data_dir` is required unless `MY_LIT_DATA_DIR` is already set (tests/CI).
+    """
+    root = (project_root or Path.cwd()).resolve()
+    if data_dir is not None:
+        resolved = data_dir.expanduser().resolve()
+    elif os.environ.get("MY_LIT_DATA_DIR"):
+        resolved = Path(os.environ["MY_LIT_DATA_DIR"]).expanduser().resolve()
+    else:
+        raise ValueError(
+            "Choose a project data directory once: `my-lit init --data-dir <path>` "
+            f"(suggested: {root / DEFAULT_DATA_DIRNAME})"
+        )
+
+    resolved.mkdir(parents=True, exist_ok=True)
+    os.environ.setdefault("MY_LIT_DATA_DIR", str(resolved))
+
+    if config_path is not None:
+        dest = config_path.expanduser().resolve()
+    elif os.environ.get("MY_LIT_CONFIG"):
+        dest = Path(os.environ["MY_LIT_CONFIG"]).expanduser().resolve()
+    else:
+        dest = resolved / "config.yaml"
+
     dest.parent.mkdir(parents=True, exist_ok=True)
     if not dest.exists() or force:
         shutil.copyfile(example_config_path(), dest)
+
+    write_project_marker(resolved, project_root=root)
+
     cfg = load_config(dest)
     cfg.db_path.parent.mkdir(parents=True, exist_ok=True)
     cfg.pdf_cache_dir.mkdir(parents=True, exist_ok=True)
