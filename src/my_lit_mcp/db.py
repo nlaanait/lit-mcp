@@ -353,7 +353,11 @@ class Database:
             """
             SELECT * FROM papers
             WHERE (parse_status IS NULL OR parse_status IN ('', 'no_pdf', 'error'))
-              AND oa_pdf_url IS NOT NULL AND oa_pdf_url != ''
+              AND (
+                (oa_pdf_url IS NOT NULL AND oa_pdf_url != '')
+                OR (doi IS NOT NULL AND doi != '')
+                OR (arxiv_id IS NOT NULL AND arxiv_id != '')
+              )
             ORDER BY score DESC, ingested_at DESC
             LIMIT ?
             """,

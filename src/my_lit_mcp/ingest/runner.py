@@ -4,13 +4,13 @@ import logging
 from typing import Any, Callable
 
 from my_lit_mcp.config import AppConfig
-from my_lit_mcp.db import Database
+from my_lit_mcp.db import Database, utc_now
 from my_lit_mcp.ingest.sources import arxiv as arxiv_src
 from my_lit_mcp.ingest.sources import openalex as openalex_src
 from my_lit_mcp.ingest.sources import pubmed as pubmed_src
 from my_lit_mcp.ingest.sources import s2 as s2_src
 from my_lit_mcp.ingest.sources.unpaywall import resolve_oa_pdf
-from my_lit_mcp.pdf import download_pdf, extract_text
+from my_lit_mcp.pdf import download_pdf, extract_text, normalize_pdf_url
 from my_lit_mcp.rank import score_paper
 from my_lit_mcp.seeds import active_seed_ids
 
@@ -18,6 +18,18 @@ log = logging.getLogger(__name__)
 
 
 def _resolve_pdf(cfg: AppConfig, payload: dict[str, Any]) -> dict[str, Any]:
+    normalized = normalize_pdf_url(
+        payload.get("oa_pdf_url"),
+        doi=payload.get("doi"),
+        arxiv_id=payload.get("arxiv_id"),
+        venue=payload.get("venue"),
+    )
+    if normalized:
+        payload["oa_pdf_url"] = normalized
+    elif payload.get("oa_pdf_url") and payload.get("doi"):
+        # Drop doi.org landing-page URLs that normalize to HTML, not PDF.
+        if "doi.org/" in payload["oa_pdf_url"].lower():
+            payload["oa_pdf_url"] = None
     if payload.get("oa_pdf_url"):
         return payload
     if payload.get("doi") and cfg.unpaywall_email:
@@ -53,17 +65,34 @@ def _store_scored(db: Database, cfg: AppConfig, payload: dict[str, Any]) -> int:
 
 def parse_one_paper(db: Database, cfg: AppConfig, paper: dict[str, Any]) -> bool:
     paper_id = int(paper["id"])
-    url = paper.get("oa_pdf_url")
+    raw_url = paper.get("oa_pdf_url")
+    url = normalize_pdf_url(
+        raw_url,
+        doi=paper.get("doi"),
+        arxiv_id=paper.get("arxiv_id"),
+        venue=paper.get("venue"),
+    )
     dest = cfg.pdf_cache_dir / f"{paper_id}.pdf"
-    if not url:
+    if not url and not paper.get("doi") and not paper.get("arxiv_id"):
         with db.session() as conn:
             db.set_fulltext(conn, paper_id, "", None, "no_pdf")
         return False
     try:
-        download_pdf(url, dest)
+        download_pdf(
+            url or raw_url or "",
+            dest,
+            doi=paper.get("doi"),
+            arxiv_id=paper.get("arxiv_id"),
+            venue=paper.get("venue"),
+        )
         text, pages = extract_text(dest, max_pages=cfg.pdf.max_pages)
         status = "ok" if text else "error"
         with db.session() as conn:
+            if url and url != raw_url:
+                conn.execute(
+                    "UPDATE papers SET oa_pdf_url = ?, updated_at = ? WHERE id = ?",
+                    (url, utc_now(), paper_id),
+                )
             db.set_fulltext(conn, paper_id, text or "", pages, status, str(dest))
             row = db.get_paper(conn, paper_id) or paper
             feedback = row.get("feedback") or {}
